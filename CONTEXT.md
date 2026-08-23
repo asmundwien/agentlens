@@ -1,6 +1,6 @@
 # Agentlens
 
-Agentlens records how coding agents use installed skills so a developer can inspect adoption and behavior across agent clients.
+Agentlens records observable skill-invocation attempts from OMP and Claude Code so a developer can see which skills are requested and how often.
 
 ## Language
 
@@ -13,17 +13,17 @@ A named instruction pack that an agent client can load into a conversation on de
 _Avoid_: Command, prompt, plugin
 
 **Skill invocation**:
-A request that successfully resolves a skill and applies its instructions to a conversation. Repeated requests count as separate invocations, even when the client reuses content already present in context.
+An explicit request by a user or model to apply one complete named skill to a conversation. It exists when the agent client emits a deterministic request signal; later resolution or application may fail. Each observable request counts separately. Preloading a skill, reading only selected lines, or reading a skill asset does not count.
 _Avoid_: File read, activation, trigger
 
 **Initiator**:
-The party that requested a skill invocation. An initiator is either the user or the model.
+The immediate party that issued the skill request. An initiator is either the user or the model; a model remains the initiator when it acts on a user's instruction.
 _Avoid_: Source, actor
 
-**Agent instance**:
-The main agent or subagent in which a skill invocation occurs.
-_Avoid_: Process, thread, session
-
 **Usage event**:
-The durable record of one skill invocation, including its agent client, initiator, skill name, time, session, and agent instance when available.
+A durable record of one observed skill-invocation signal, including its agent client, initiator, skill name, and observation time. It carries no conversation, session, or agent-instance identity. The first feature records signals independently and does not deduplicate repeated delivery.
 _Avoid_: Metric, log entry, hit
+
+**Observed invocation count**:
+The number of usage events within a report's query scope. It reflects only deterministic signals exposed by agent clients and does not imply successful skill application or complete usage accounting.
+_Avoid_: Successful uses, Total usage
