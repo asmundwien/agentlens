@@ -1,7 +1,7 @@
 # Supported agent-client lifecycle and cleanup controls
 
 Research date: 2026-09-02  
-Scope: the installed Claude, Codex, GitHub Copilot, OMP, Pi, ChatGPT, Visual Studio Code, and Agentlens components on this macOS workstation.
+Scope: the installed Claude, Codex, GitHub Copilot, OMP, Pi, ChatGPT, Visual Studio Code, Docker cagent, and Agentlens components on this macOS workstation.
 
 ## Safety and interpretation
 
@@ -35,6 +35,7 @@ Direct, read-only inspection used `which`, each client's version/help command, `
 | ChatGPT | `/Applications/ChatGPT.app`, `26.825.32147`, Homebrew cask record exists | The current app includes Chat, Work, and Codex. Local Codex and app state spans `~/.codex` and app containers/support paths. |
 | ChatGPT VS Code extension | `openai.chatgpt@26.825.51511` | Managed by VS Code; Codex CLI and IDE share cached login details. |
 | Visual Studio Code | `/Applications/Visual Studio Code.app`, `1.134.0`; Homebrew cask record `1.108.2` | The app has self-updated beyond the cask receipt. User settings, extension payloads, storage, sessions, and caches exist under the documented VS Code user-data roots. |
+| Docker `cagent` | `1.23.0` at `/usr/local/bin/cagent`, bundled and owned by Docker Desktop | cagent has no separate package-manager receipt. Host state is split between `~/.cagent` and `~/.config/cagent`; model credentials are external environment data in this release. |
 | Agentlens | Cargo install record `agentlens v0.1.0`, executable at `~/.local/bin/agentlens` | Durable data is `~/Library/Application Support/Agentlens/agentlens.sqlite3`; client integrations are separate OMP and Claude configuration. |
 
 A stale package receipt does not prove the live bundle/binary version. The Copilot, Pi, VS Code, and desktop-app differences above are why lifecycle work should identify the **owning updater currently in use** before making changes.
@@ -234,6 +235,32 @@ The current first-party upstream is [`badlogic/pi-mono`](https://github.com/badl
 
 - VS Code profiles, extension hosts, agent worktrees, and user-data directories are not VM disks. No VS Code-owned VM cleanup action is documented here. Remote/dev-container VM or Docker data belongs to the remote/container provider and is not documented as removed by VS Code uninstall or reset.
 
+## Docker `cagent` 1.23.0
+
+Docker renamed this product: Docker Desktop 4.49 through 4.62 bundled it as `cagent`; Desktop 4.63 and later bundles **Docker Agent** as `docker agent`. The installed `cagent` is therefore a legacy-but-owned Docker Desktop component, not a separately installed Homebrew or standalone binary. [Docker Agent installation/rename](https://docs.docker.com/ai/docker-agent/#installation), [`cagent` v1.23.0 release](https://github.com/docker/cagent/releases/tag/v1.23.0)
+
+**Install, update, and uninstall**
+
+- For the observed channel, installing Docker Desktop installs `cagent`; there is no separate cagent package record. Docker's current installation docs say Desktop owns and keeps the bundled agent updated. Docker Desktop's Software updates settings separately control update checks, background downloads, and automatic component updates. [Docker Agent installation](https://docs.docker.com/ai/docker-agent/#installation), [Docker Desktop update settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/#software-updates)
+- The 1.23.0 command registry has no `update` or self-update command. Updating this installation therefore means updating its owner, Docker Desktop. Current Docker Agent supports opt-in self-update only for standalone release binaries and directs Docker Desktop/Homebrew installations back to their owner. Exact migration of 1.23.0 settings, sessions, cache, and the `cagent` command name across the Docker Agent rename is **unknown**. [`cagent` 1.23 command registry](https://github.com/docker/cagent/blob/v1.23.0/cmd/root/root.go), [current Docker Agent update contract](https://docker.github.io/docker-agent/getting-started/installation/#optional-self-updates)
+- Docker publishes no cagent-only uninstaller for the Desktop-bundled binary. Docker Desktop's macOS uninstaller removes Docker Desktop and warns that this destroys local containers, images, volumes, other Docker-related data, and app-generated files. Its residual-path guidance names Docker group-container and `~/.docker` paths but does not name `~/.cagent` or `~/.config/cagent`; preservation/removal of cagent state is therefore **unknown**. [Docker Desktop uninstall](https://docs.docker.com/desktop/uninstall/)
+- Docker Desktop **Clean up data** and **Reset to factory defaults** are broad Docker controls, not cagent reset mechanisms. Docker says cleanup resets all Docker data and loses existing settings; factory reset restores Desktop options to initial state. The docs do not state whether either removes the host cagent roots, so they cannot be presented as cagent cleanup. [Docker Desktop troubleshoot controls](https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoot/#troubleshoot-menu)
+
+**Settings, authentication, sessions, and state**
+
+- Release 1.23 separates user configuration at `~/.config/cagent/config.yaml` from data/cache/log roots at `~/.cagent`. User configuration can hold aliases, theme/approval preferences, a models gateway/default model, and an external Docker credential-helper command. `cagent config` only shows the configuration or its path; there is no config/factory-reset action. `cagent alias remove NAME` removes one alias record, not its target agent YAML or other state. [User-config source](https://github.com/docker/cagent/blob/v1.23.0/pkg/userconfig/userconfig.go), [path definitions](https://github.com/docker/cagent/blob/v1.23.0/pkg/paths/paths.go)
+- Model-provider API keys are read from environment variables and, in the 1.23 documentation, are explicitly not stored in agent config files. The 1.23 command surface has no login/logout/auth-reset command. Removing the binary or cagent directories does not remove credentials set in a shell profile, process environment, external credential helper, Docker credential store, cloud-provider chain, or Docker Model Runner. [1.23 configuration/auth contract](https://github.com/docker/cagent/blob/v1.23.0/docs/pages/configuration/overview.html)
+- MCP OAuth tokens in 1.23 use an in-memory token store with per-resource removal; process exit discards them. No user-facing persistent-token cleanup command is documented for that release. [1.23 MCP token store](https://github.com/docker/cagent/blob/v1.23.0/pkg/tools/mcp/tokenstore.go)
+- Interactive sessions default to SQLite at `~/.cagent/session.db`; `--session-db` selects another database. `/new` starts another conversation, while `/sessions` browses/resumes saved sessions and `/compact` summarizes context. These are not durable cleanup. A `cagent api` server exposes `DELETE /api/sessions/:id`, which deletes one session from that server's selected database. The 1.23 TUI exposes no delete action, and no bulk prune, retention, or session-GC control is documented. [run/session path](https://github.com/docker/cagent/blob/v1.23.0/cmd/root/run.go), [TUI session behavior](https://github.com/docker/cagent/blob/v1.23.0/docs/pages/features/tui.html), [API session deletion](https://github.com/docker/cagent/blob/v1.23.0/docs/pages/features/api-server.html#L25-L41)
+
+**Caches, catalog artifacts, logs, and VM data**
+
+- `~/.cagent/store` is a content-addressed local OCI agent-artifact store containing tar payloads, metadata, and reference links. Source includes an internal single-artifact delete operation, but `cagent pull`, `push`, and `catalog list` expose no user cleanup/GC command. Cache eviction, orphan pruning, and full state-reset semantics are **unknown**. [content-store implementation](https://github.com/docker/cagent/blob/v1.23.0/pkg/content/store.go), [1.23 command registry](https://github.com/docker/cagent/blob/v1.23.0/cmd/root/root.go)
+- Debug mode writes `~/.cagent/cagent.debug.log`; the logger rotates above 10 MiB and keeps up to three backups. This is the only first-party automatic local cleanup found for this release; it does not cover sessions, OCI artifacts, themes, config, or other state. [logging lifecycle source](https://github.com/docker/cagent/blob/v1.23.0/cmd/root/root.go#L151-L171)
+- cagent can invoke containerized MCP tools and Docker Model Runner, but the Linux VM, container images, volumes, and model data are Docker Desktop/Engine state rather than cagent's host store. Docker Desktop uninstall or broad reset can destroy that VM-backed Docker data; cagent has no narrower VM-data cleanup control. `~/.cagent/store` is a host OCI-agent cache and must not be conflated with Docker's VM disk. [Docker Desktop uninstall warning](https://docs.docker.com/desktop/uninstall/), [Docker Desktop VM settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/#resources)
+
+**First-party gap:** no cagent-only uninstall, update, logout, factory reset, cache purge, OCI-store GC, TUI/bulk session cleanup, retention policy, or VM cleanup mechanism is documented for the Desktop-bundled 1.23.0 component. Docker Desktop owns the binary lifecycle, but its destructive lifecycle is much broader and does not define what happens to the two cagent host-state roots.
+
 ## Agentlens
 
 **Install, update, and package record**
@@ -257,6 +284,7 @@ The current first-party upstream is [`badlogic/pi-mono`](https://github.com/badl
 6. **Pi:** no factory reset or broad cache/session GC; application uninstall explicitly preserves the whole Pi user-data root.
 7. **ChatGPT macOS:** no vendor uninstall, factory reset, local cache purge, credential purge, or app-state preservation inventory; no product-owned macOS VM data lifecycle is documented.
 8. **VS Code:** extension-specific residual state, selective cache cleanup, Keychain cleanup, and profile-delete propagation are not fully documented; Settings Sync cloud state is separate.
-9. **Agentlens:** no updater, selective deletion, retention/GC, cache, auth, session, or VM lifecycle. Its executable, two integrations, and durable database are intentionally independent.
+9. **Docker cagent:** no component-only uninstall/update, auth reset, factory reset, session cleanup, OCI-store GC, or VM cleanup; Docker Desktop lifecycle is broader and does not specify the fate of cagent host state.
+10. **Agentlens:** no updater, selective deletion, retention/GC, cache, auth, session, or VM lifecycle. Its executable, two integrations, and durable database are intentionally independent.
 
 The evidence supports documenting available controls, not choosing a retention or deletion policy. Any cleanup decision must separately choose the intended layer—package, settings, credentials, local sessions, synced/cloud sessions, plugins/extensions, caches/archives, worktrees, OS permissions, or account data—and must preserve `unknown` where first-party semantics stop.
