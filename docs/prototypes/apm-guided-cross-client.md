@@ -116,6 +116,18 @@ Removing the second collision package correctly restored the first package as ac
 
 Observed conclusion: package uninstall can disturb unrelated root-owned hooks and requires a subsequent install to reconcile them.
 
+### Cleanup behavior
+
+`apm deps clean --dry-run` said it would remove two packages, and `apm deps clean --yes` deleted `apm_modules/`. It did not remove dependency declarations from `apm.yml`, lock entries, or deployed output. The next `apm install` therefore downloaded and deployed both packages again. This contradicts the command help's unqualified description, “Remove all APM dependencies”; the command is package-cache cleanup in this run.
+
+After the root hook source and MCP declaration were removed, `apm install` removed the copied hook scripts, the Copilot hook descriptor, and all three MCP entries. It left Claude and Codex hook configurations and ownership sidecars pointing at deleted scripts. A later package uninstall happened to reconcile those unrelated hook remnants. Empty `.mcp.json`, `.github/mcp.json`, and `.codex/config.toml` files remained after MCP removal.
+
+Uninstalling all remaining project packages removed their manifest declarations, transitive dependency, lockfile, cache content, deployed primitives, and hook sidecars. It left empty `apm_modules/` and target configuration files. The no-dependency audit passed its sole lockfile check, and `apm prune --dry-run` found no orphaned packages.
+
+Global uninstall removed the fake-user package, its transitive dependency, and their deployed primitives while preserving the user-scope manifest and APM configuration.
+
+The preserved report was committed before the 5.4 MiB disposable root was deleted. No synthetic home, project output, or collision-package source remains on disk.
+
 ## Ownership verdict
 
 APM `0.29.0` demonstrates a useful project-scope model: one manifest, exact lock pins, target-native projection, explicit deployment owners, deterministic repair, cache-only audit replay, and native cleanup commands.
@@ -129,6 +141,8 @@ It does not yet fit as the sole cross-client owner for this environment:
 5. Unowned files in generated skill paths were overwritten silently.
 6. Package-to-package skill collisions use last-installed-wins semantics and blur losing-source hashes.
 7. Uninstalling one package disturbed unrelated root-owned hooks.
-8. `apm targets` and add-style install dry-run present incomplete or misleading previews.
+8. `apm deps clean` removed only cached packages, not declared dependencies or deployed output.
+9. Removing root hook source left dangling Claude and Codex hook configuration until an unrelated package uninstall reconciled it.
+10. `apm targets` and add-style install dry-run present incomplete or misleading previews.
 
 Safe near-term use is narrower: project scope only, committed manifest and lockfile, APM-exclusive generated target paths, explicit targets, and `apm audit --ci` after install/update/uninstall. Global ownership and migration of existing mixed-ownership client directories should wait until the observed defects are resolved or explicitly accepted. OMP and Pi require a separate owner regardless.
